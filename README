@@ -35,6 +35,7 @@ Usage: fdupes [options] DIRECTORY...
                   	prompting the user
  -I --immediate   	delete duplicates as they are encountered, without
                   	grouping into sets; implies --noprompt
+ -l --relink      	replace duplicate with hard link; if -d is also passed, the files not selected will get deleted.
  -p --permissions 	don't consider files with different owner/group or
                   	permission bits as duplicates
  -o --order=BY    	select sort order for output and deleting; by file

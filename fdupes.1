@@ -66,6 +66,8 @@ set of duplicates and delete the others without prompting the user
 .B -I --immediate
 delete duplicates as they are encountered, without
 grouping into sets; implies --noprompt
+.B -l --relink
+replace duplicate with hard link; if -d is also passed, the files not selected will get deleted.
 .TP
 .B -p --permissions
 don't consider files with different owner/group or permission bits as duplicates

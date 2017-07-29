@@ -38,22 +38,24 @@
 #define ISFLAG(a,b) ((a & b) == b)
 #define SETFLAG(a,b) (a |= b)
 
-#define F_RECURSE           0x0001
-#define F_HIDEPROGRESS      0x0002
-#define F_DSAMELINE         0x0004
-#define F_FOLLOWLINKS       0x0008
-#define F_DELETEFILES       0x0010
-#define F_EXCLUDEEMPTY      0x0020
-#define F_CONSIDERHARDLINKS 0x0040
-#define F_SHOWSIZE          0x0080
-#define F_OMITFIRST         0x0100
-#define F_RECURSEAFTER      0x0200
-#define F_NOPROMPT          0x0400
-#define F_SUMMARIZEMATCHES  0x0800
-#define F_EXCLUDEHIDDEN     0x1000
-#define F_PERMISSIONS       0x2000
-#define F_REVERSE           0x4000
-#define F_IMMEDIATE         0x8000
+#define F_RECURSE           0x00001
+#define F_HIDEPROGRESS      0x00002
+#define F_DSAMELINE         0x00004
+#define F_FOLLOWLINKS       0x00008
+#define F_DELETEFILES       0x00010
+#define F_EXCLUDEEMPTY      0x00020
+#define F_CONSIDERHARDLINKS 0x00040
+#define F_SHOWSIZE          0x00080
+#define F_OMITFIRST         0x00100
+#define F_RECURSEAFTER      0x00200
+#define F_NOPROMPT          0x00400
+#define F_SUMMARIZEMATCHES  0x00800
+#define F_EXCLUDEHIDDEN     0x01000
+#define F_PERMISSIONS       0x02000
+#define F_REVERSE           0x04000
+#define F_IMMEDIATE         0x08000
+#define F_RELINK            0x10000
+#define F_RMNOLINK          0x20000
 
 typedef enum {
   ORDER_MTIME = 0,
@@ -273,16 +275,16 @@ int grokdir(char *dir, file_t **filelistp)
   while ((dirinfo = readdir(cd)) != NULL) {
     if (strcmp(dirinfo->d_name, ".") && strcmp(dirinfo->d_name, "..")) {
       if (!ISFLAG(flags, F_HIDEPROGRESS)) {
-	fprintf(stderr, "\rBuilding file list %c ", indicator[progress]);
-	progress = (progress + 1) % 4;
+        fprintf(stderr, "\rBuilding file list %c ", indicator[progress]);
+        progress = (progress + 1) % 4;
       }
 
       newfile = (file_t*) malloc(sizeof(file_t));
 
       if (!newfile) {
-	errormsg("out of memory!\n");
-	closedir(cd);
-	exit(1);
+        errormsg("out of memory!\n");
+        closedir(cd);
+        exit(1);
       } else newfile->next = *filelistp;
 
       newfile->device = 0;
@@ -295,60 +297,60 @@ int grokdir(char *dir, file_t **filelistp)
       newfile->d_name = (char*)malloc(strlen(dir)+strlen(dirinfo->d_name)+2);
 
       if (!newfile->d_name) {
-	errormsg("out of memory!\n");
-	free(newfile);
-	closedir(cd);
-	exit(1);
+        errormsg("out of memory!\n");
+        free(newfile);
+        closedir(cd);
+        exit(1);
       }
 
       strcpy(newfile->d_name, dir);
       lastchar = strlen(dir) - 1;
       if (lastchar >= 0 && dir[lastchar] != '/')
-	strcat(newfile->d_name, "/");
+        strcat(newfile->d_name, "/");
       strcat(newfile->d_name, dirinfo->d_name);
-      
+
       if (ISFLAG(flags, F_EXCLUDEHIDDEN)) {
-	fullname = strdup(newfile->d_name);
-	name = basename(fullname);
-	if (name[0] == '.' && strcmp(name, ".") && strcmp(name, "..") ) {
-	  free(newfile->d_name);
-	  free(newfile);
-	  continue;
-	}
-	free(fullname);
+        fullname = strdup(newfile->d_name);
+        name = basename(fullname);
+        if (name[0] == '.' && strcmp(name, ".") && strcmp(name, "..") ) {
+          free(newfile->d_name);
+          free(newfile);
+          continue;
+        }
+        free(fullname);
       }
 
       if (filesize(newfile->d_name) == 0 && ISFLAG(flags, F_EXCLUDEEMPTY)) {
-	free(newfile->d_name);
-	free(newfile);
-	continue;
+        free(newfile->d_name);
+        free(newfile);
+        continue;
       }
 
       if (stat(newfile->d_name, &info) == -1) {
-	free(newfile->d_name);
-	free(newfile);
-	continue;
+        free(newfile->d_name);
+        free(newfile);
+        continue;
       }
 
       if (lstat(newfile->d_name, &linfo) == -1) {
-	free(newfile->d_name);
-	free(newfile);
-	continue;
+        free(newfile->d_name);
+        free(newfile);
+        continue;
       }
 
       if (S_ISDIR(info.st_mode)) {
-	if (ISFLAG(flags, F_RECURSE) && (ISFLAG(flags, F_FOLLOWLINKS) || !S_ISLNK(linfo.st_mode)))
-	  filecount += grokdir(newfile->d_name, filelistp);
-	free(newfile->d_name);
-	free(newfile);
+        if (ISFLAG(flags, F_RECURSE) && (ISFLAG(flags, F_FOLLOWLINKS) || !S_ISLNK(linfo.st_mode)))
+          filecount += grokdir(newfile->d_name, filelistp);
+        free(newfile->d_name);
+        free(newfile);
       } else {
-	if (S_ISREG(linfo.st_mode) || (S_ISLNK(linfo.st_mode) && ISFLAG(flags, F_FOLLOWLINKS))) {
-	  *filelistp = newfile;
-	  filecount++;
-	} else {
-	  free(newfile->d_name);
-	  free(newfile);
-	}
+        if (S_ISREG(linfo.st_mode) || (S_ISLNK(linfo.st_mode) && ISFLAG(flags, F_FOLLOWLINKS))) {
+          *filelistp = newfile;
+          filecount++;
+        } else {
+          free(newfile->d_name);
+          free(newfile);
+        }
       }
     }
   }
@@ -366,12 +368,12 @@ md5_byte_t *getcrcsignatureuntil(char *filename, off_t max_read)
   static md5_byte_t digest[MD5_DIGEST_LENGTH];  
   static md5_byte_t chunk[CHUNK_SIZE];
   FILE *file;
-   
+
   md5_init(&state);
 
- 
+
   fsize = filesize(filename);
-  
+
   if (max_read != 0 && fsize > max_read)
     fsize = max_read;
 
@@ -380,7 +382,7 @@ md5_byte_t *getcrcsignatureuntil(char *filename, off_t max_read)
     errormsg("error opening file %s\n", filename);
     return NULL;
   }
- 
+
   while (fsize > 0) {
     toread = (fsize >= CHUNK_SIZE) ? CHUNK_SIZE : fsize;
     if (fread(chunk, toread, 1, file) != 1) {
@@ -435,9 +437,9 @@ void md5copy(md5_byte_t *to, const md5_byte_t *from)
 void purgetree(filetree_t *checktree)
 {
   if (checktree->left != NULL) purgetree(checktree->left);
-    
+
   if (checktree->right != NULL) purgetree(checktree->right);
-    
+
   free(checktree);
 }
 
@@ -468,7 +470,7 @@ int registerfile(filetree_t **branch, file_t *file)
     errormsg("out of memory!\n");
     exit(1);
   }
-  
+
   (*branch)->file = file;
   (*branch)->left = NULL;
   (*branch)->right = NULL;
@@ -754,6 +756,9 @@ char *revisefilename(char *path, int seq)
   return newpath;
 } */
 
+/* create a link 
+   the dir tree is not supposed to contain hard linked files, so no need to check here
+ */
 int relink(char *oldfile, char *newfile)
 {
   dev_t od;
@@ -765,7 +770,10 @@ int relink(char *oldfile, char *newfile)
   oi = getinode(oldfile);
 
   if (link(oldfile, newfile) != 0)
+  {
+    printf("error %s linking %s and %s",strerror(errno),oldfile,newfile);
     return 0;
+  }
 
   /* make sure we're working with the right file (the one we created) */
   nd = getdevice(newfile);
@@ -777,9 +785,11 @@ int relink(char *oldfile, char *newfile)
   return 1;
 }
 
+
 void deletefiles(file_t *files, int prompt, FILE *tty)
 {
   int counter;
+  int first;
   int groups = 0;
   int curgroup = 0;
   file_t *tmpfile;
@@ -796,7 +806,7 @@ void deletefiles(file_t *files, int prompt, FILE *tty)
   int i;
 
   curfile = files;
-  
+
   while (curfile) {
     if (curfile->hasdupes) {
       counter = 1;
@@ -804,13 +814,13 @@ void deletefiles(file_t *files, int prompt, FILE *tty)
 
       tmpfile = curfile->duplicates;
       while (tmpfile) {
-	counter++;
-	tmpfile = tmpfile->duplicates;
+        counter++;
+        tmpfile = tmpfile->duplicates;
       }
-      
+
       if (counter > max) max = counter;
     }
-    
+
     curfile = curfile->next;
   }
 
@@ -836,86 +846,110 @@ void deletefiles(file_t *files, int prompt, FILE *tty)
       tmpfile = files->duplicates;
 
       while (tmpfile) {
-	dupelist[++counter] = tmpfile;
-	if (prompt) printf("[%d] %s\n", counter, tmpfile->d_name);
-	tmpfile = tmpfile->duplicates;
+        dupelist[++counter] = tmpfile;
+        if (prompt) printf("[%d] %s\n", counter, tmpfile->d_name);
+        tmpfile = tmpfile->duplicates;
       }
 
       if (prompt) printf("\n");
+      first = -1;
 
       if (!prompt) /* preserve only the first file */
       {
-         preserve[1] = 1;
-	 for (x = 2; x <= counter; x++) preserve[x] = 0;
+        preserve[1] = 1;
+        first = 1;
+        for (x = 2; x <= counter; x++) preserve[x] = 0;
       }
 
       else /* prompt for files to preserve */
 
-      do {
-	printf("Set %d of %d, preserve files [1 - %d, all]", 
-          curgroup, groups, counter);
-	if (ISFLAG(flags, F_SHOWSIZE)) printf(" (%lld byte%seach)", (long long int)files->size,
-	  (files->size != 1) ? "s " : " ");
-	printf(": ");
-	fflush(stdout);
+        do {
+          printf("Set %d of %d, %s files [1 - %d, all]", 
+              curgroup, groups, F_RELINK ? "relink":"preserve",counter);
+          if (ISFLAG(flags, F_SHOWSIZE)) printf(" (%lld byte%seach)", (long long int)files->size,
+              (files->size != 1) ? "s " : " ");
+          printf(": ");
+          fflush(stdout);
 
-	if (!fgets(preservestr, INPUT_SIZE, tty))
-	  preservestr[0] = '\n'; /* treat fgets() failure as if nothing was entered */
+          if (!fgets(preservestr, INPUT_SIZE, tty))
+            preservestr[0] = '\n'; /* treat fgets() failure as if nothing was entered */
 
-	i = strlen(preservestr) - 1;
+          i = strlen(preservestr) - 1;
+          while (preservestr[i]!='\n'){ /* tail of buffer must be a newline */
+            tstr = (char*)
+              realloc(preservestr, strlen(preservestr) + 1 + INPUT_SIZE);
+            if (!tstr) { /* couldn't allocate memory, treat as fatal */
+              errormsg("out of memory!\n");
+              exit(1);
+            }
 
-	while (preservestr[i]!='\n'){ /* tail of buffer must be a newline */
-	  tstr = (char*)
-	    realloc(preservestr, strlen(preservestr) + 1 + INPUT_SIZE);
-	  if (!tstr) { /* couldn't allocate memory, treat as fatal */
-	    errormsg("out of memory!\n");
-	    exit(1);
-	  }
+            preservestr = tstr;
+            if (!fgets(preservestr + i + 1, INPUT_SIZE, tty))
+            {
+              preservestr[0] = '\n'; /* treat fgets() failure as if nothing was entered */
+              break;
+            }
+            i = strlen(preservestr)-1;
+          }
 
-	  preservestr = tstr;
-	  if (!fgets(preservestr + i + 1, INPUT_SIZE, tty))
-	  {
-	    preservestr[0] = '\n'; /* treat fgets() failure as if nothing was entered */
-	    break;
-	  }
-	  i = strlen(preservestr)-1;
-	}
+          for (x = 1; x <= counter; x++) preserve[x] = 0;
 
-	for (x = 1; x <= counter; x++) preserve[x] = 0;
-	
-	token = strtok(preservestr, " ,\n");
-	
-	while (token != NULL) {
-	  if (strcasecmp(token, "all") == 0 || strcasecmp(token, "a") == 0)
-	    for (x = 0; x <= counter; x++) preserve[x] = 1;
-	  
-	  number = 0;
-	  sscanf(token, "%d", &number);
-	  if (number > 0 && number <= counter) preserve[number] = 1;
-	  
-	  token = strtok(NULL, " ,\n");
-	}
-      
-	for (sum = 0, x = 1; x <= counter; x++) sum += preserve[x];
-      } while (sum < 1); /* make sure we've preserved at least one file */
+          token = strtok(preservestr, " ,\n");
+
+          while (token != NULL) {
+            if (strcasecmp(token, "a") == 0 || strcasecmp(token, "a") == 0)
+              for (x = 0; x <= counter; x++) preserve[x] = 1;
+
+            number = 0;
+            sscanf(token, "%d", &number);
+            if (number > 0 && number <= counter) 
+            {
+              preserve[number] = 1;
+              if ( first < 0) 
+                first = number;
+              }
+            token = strtok(NULL, " ,\n");
+          }
+
+          for (sum = 0, x = 1; x <= counter; x++) sum += preserve[x];
+        } while (sum < 1); /* make sure we've preserved at least one file */
 
       printf("\n");
-
+      if ( first < 0 )
+        first = 1;
+      if (ISFLAG(flags, F_RELINK))
+            printf("   [+] %s\n", dupelist[first]->d_name);
       for (x = 1; x <= counter; x++) { 
-	if (preserve[x])
-	  printf("   [+] %s\n", dupelist[x]->d_name);
-	else {
-	  if (remove(dupelist[x]->d_name) == 0) {
-	    printf("   [-] %s\n", dupelist[x]->d_name);
-	  } else {
-	    printf("   [!] %s ", dupelist[x]->d_name);
-	    printf("-- unable to delete file!\n");
-	  }
-	}
+        if (preserve[x])
+        {
+          if (ISFLAG(flags, F_RELINK) && first != x)
+          {
+            if (remove(dupelist[x]->d_name) == 0) {
+              {
+                relink(dupelist[first]->d_name, dupelist[x]->d_name);
+              }
+              printf("   [l] %s\n", dupelist[x]->d_name);
+            }
+          }
+        //  else
+//            if ( ! ISFLAG(flags, F_RELINK))
+ //             printf("   [+] %s\n", dupelist[x]->d_name);
+        }
+        else 
+        {
+          if (ISFLAG(flags, F_RMNOLINK)) {
+            if (remove(dupelist[x]->d_name) == 0) {
+              printf("   [-] %s\n", dupelist[x]->d_name);
+            } else {
+              printf("   [!] %s\n", dupelist[x]->d_name);
+              printf("-- unable to delete file!\n");
+            }
+          }
+        }
       }
       printf("\n");
     }
-    
+
     files = files->next;
   }
 
@@ -948,7 +982,7 @@ int sort_pairs_by_filename(file_t *f1, file_t *f2)
 }
 
 void registerpair(file_t **matchlist, file_t *newmatch, 
-		  int (*comparef)(file_t *f1, file_t *f2))
+    int (*comparef)(file_t *f1, file_t *f2))
 {
   file_t *traverse;
   file_t *back;
@@ -962,16 +996,16 @@ void registerpair(file_t **matchlist, file_t *newmatch,
     if (comparef(newmatch, traverse) <= 0)
     {
       newmatch->duplicates = traverse;
-      
+
       if (back == 0)
       {
-	*matchlist = newmatch; /* update pointer to head of list */
+        *matchlist = newmatch; /* update pointer to head of list */
 
-	newmatch->hasdupes = 1;
-	traverse->hasdupes = 0; /* flag is only for first file in dupe chain */
+        newmatch->hasdupes = 1;
+        traverse->hasdupes = 0; /* flag is only for first file in dupe chain */
       }
       else
-	back->duplicates = newmatch;
+        back->duplicates = newmatch;
 
       break;
     }
@@ -979,22 +1013,22 @@ void registerpair(file_t **matchlist, file_t *newmatch,
     {
       if (traverse->duplicates == 0)
       {
-	traverse->duplicates = newmatch;
-	
-	if (back == 0)
-	  traverse->hasdupes = 1;
-	
-	break;
+        traverse->duplicates = newmatch;
+
+        if (back == 0)
+          traverse->hasdupes = 1;
+
+        break;
       }
     }
-    
+
     back = traverse;
     traverse = traverse->duplicates;
   }
 }
 
 void deletesuccessor(file_t **existing, file_t *duplicate, 
-      int (*comparef)(file_t *f1, file_t *f2))
+    int (*comparef)(file_t *f1, file_t *f2))
 {
   file_t *to_keep;
   file_t *to_delete;
@@ -1051,7 +1085,7 @@ void help_text()
   printf("                  \twith -s or --symlinks, or when specifying a\n");
   printf("                  \tparticular directory more than once; refer to the\n");
   printf("                  \tfdupes documentation for additional information\n");
-  /*printf(" -l --relink      \t(description)\n");*/
+  printf(" -l --relink      \treplace files with hardlinks\n");
   printf(" -N --noprompt    \ttogether with --delete, preserve the first file in\n");
   printf("                  \teach set of duplicates and delete the rest without\n");
   printf("                  \tprompting the user\n");
@@ -1083,7 +1117,7 @@ int main(int argc, char **argv) {
   int progress = 0;
   char **oldargv;
   int firstrecurse;
-  
+
 #ifndef OMIT_GETOPT_LONG
   static struct option long_options[] = 
   {
@@ -1097,7 +1131,6 @@ int main(int argc, char **argv) {
     { "size", 0, 0, 'S' },
     { "symlinks", 0, 0, 's' },
     { "hardlinks", 0, 0, 'H' },
-    { "relink", 0, 0, 'l' },
     { "noempty", 0, 0, 'n' },
     { "nohidden", 0, 0, 'A' },
     { "delete", 0, 0, 'd' },
@@ -1105,6 +1138,7 @@ int main(int argc, char **argv) {
     { "help", 0, 0, 'h' },
     { "noprompt", 0, 0, 'N' },
     { "immediate", 0, 0, 'I'},
+    { "relink", 0, 0, 'l' },
     { "summarize", 0, 0, 'm'},
     { "summary", 0, 0, 'm' },
     { "permissions", 0, 0, 'p' },
@@ -1121,7 +1155,7 @@ int main(int argc, char **argv) {
 
   oldargv = cloneargs(argc, argv);
 
-  while ((opt = GETOPT(argc, argv, "frRq1SsHlnAdvhNImpo:i"
+  while ((opt = GETOPT(argc, argv, "frRq1SsHnAdvhNIlmpo:i"
 #ifndef OMIT_GETOPT_LONG
           , long_options, NULL
 #endif
@@ -1172,6 +1206,9 @@ int main(int argc, char **argv) {
     case 'I':
       SETFLAG(flags, F_IMMEDIATE);
       break;
+  	case 'l':
+	    SETFLAG(flags, F_RELINK);
+      break;
     case 'm':
       SETFLAG(flags, F_SUMMARIZEMATCHES);
       break;
@@ -1214,6 +1251,9 @@ int main(int argc, char **argv) {
     errormsg("options --summarize and --delete are not compatible\n");
     exit(1);
   }
+
+  if (ISFLAG(flags, F_DELETEFILES) && ISFLAG(flags, F_RELINK))
+    SETFLAG(flags, F_RMNOLINK);
 
   if (ISFLAG(flags, F_RECURSEAFTER)) {
     firstrecurse = nonoptafter("--recurse:", argc, oldargv, argv, optind);
@@ -1293,12 +1333,10 @@ int main(int argc, char **argv) {
 
   if (!ISFLAG(flags, F_HIDEPROGRESS)) fprintf(stderr, "\r%40s\r", " ");
 
-  if (ISFLAG(flags, F_DELETEFILES))
+  if (ISFLAG(flags, F_DELETEFILES) || ISFLAG(flags, F_RELINK))
   {
     if (ISFLAG(flags, F_NOPROMPT))
-    {
-      deletefiles(files, 0, 0);
-    }
+        deletefiles(files, 0, stdin);
     else
     {
       if (freopen("/dev/tty", "r", stdin) == 0)
@@ -1306,19 +1344,18 @@ int main(int argc, char **argv) {
         errormsg("could not open terminal for input\n");
         exit(1);
       }
-
       deletefiles(files, 1, stdin);
     }
   }
 
   else 
-
+  {
     if (ISFLAG(flags, F_SUMMARIZEMATCHES))
       summarizematches(files);
-      
     else
-
       printmatches(files);
+  }
+
 
   while (files) {
     curfile = files->next;
@@ -1338,3 +1375,5 @@ int main(int argc, char **argv) {
 
   return 0;
 }
+
+/* vim: set ts=2 sw=2 expandtab */
